@@ -2,7 +2,6 @@ import numpy as np
 
 from feature import EstimateE_RANSAC
 from utils import get_single_right_null_space
-from reconstruction import Triangulation_nl
 
 
 def GetCameraPoseFromE(E):
@@ -36,8 +35,8 @@ def GetCameraPoseFromE(E):
         R2 = -R2
     t = U[:, 2]
 
-    R_set = np.stack([R1, R1, R2, R2])
-    C_set = np.stack([R1.T @ t, -R1.T @ t, R2.T @ t, -R2.T @ t])
+    R_set=np.array([R1, R1, R2, R2])
+    C_set=np.array([-R1.T @ t, R1.T @ t, -R2.T @ t, R2.T @ t])
 
     return R_set, C_set
 
@@ -64,45 +63,24 @@ def Triangulation(P1, P2, track1, track2):
         The set of 3D points
     """
 
-    # mask_valid = np.any(track1 != -1, axis=1) & np.any(track2 != -1, axis=1)
-    # track1_valid = track1[mask_valid]
-    # track2_valid = track2[mask_valid]
-    # valid_indices = np.where(mask_valid)[0]
+    mask_valid = np.any(track1 != -1, axis=1) & np.any(track2 != -1, axis=1)
+    track1_valid = track1[mask_valid]
+    track2_valid = track2[mask_valid]
+    valid_indices = np.where(mask_valid)[0]
 
-    # n = track1.shape[0]
-    # X = np.full((n, 3), -1.)
-    # for valid_index, (x1, y1), (x2, y2) in zip(valid_indices, track1_valid, track2_valid):
-    #     A = np.array([
-    #         x1 * P1[2] - P1[0],
-    #         y1 * P1[2] - P1[1],
-    #         x2 * P2[2] - P2[0],
-    #         y2 * P2[2] - P2[1]])
-    #     point3d_homo = get_single_right_null_space(A)
-    #     point3d_eucl = point3d_homo[:3] / point3d_homo[3]
-    #     print(point3d_homo)
-    #     print(point3d_eucl)
-    #     X[valid_index] = point3d_eucl
-
-    # return X
-
-    X=np.zeros((len(track1),3))
-    for i in range(len(X)):
-        if(np.all(track1[i]==[-1]) or np.all(track2[i]==[-1])):
-            X[i]=[-1,-1,-1]
-        else:
-            A=np.vstack((([[0, -1, track1[i,1]], [1, 0, -track1[i,0]], [-track1[i,1], track1[i,0], 0]]@P1),
-                ([[0, -1, track2[i,1]], [1, 0, -track2[i,0]], [-track2[i,1], track2[i,0], 0]]@P2)))
-            #Get null space
-            u,s,v_t=np.linalg.svd(A)
-            #Normalize by last entry to make it [X 1]
-            if(abs(v_t[-1,3])>0):
-                X[i]=v_t[-1,:3]/v_t[-1,3]
-            #Prevent divide by zero
-            else:
-                X[i]=v_t[-1,:3]/(v_t[-1,3]+1e-8)
+    n = track1.shape[0]
+    X = np.full((n, 3), -1.)
+    for valid_index, (x1, y1), (x2, y2) in zip(valid_indices, track1_valid, track2_valid):
+        A = np.array([
+            x1 * P1[2] - P1[0],
+            y1 * P1[2] - P1[1],
+            x2 * P2[2] - P2[0],
+            y2 * P2[2] - P2[1]])
+        point3d_homo = get_single_right_null_space(A)
+        point3d_eucl = point3d_homo[:3] / point3d_homo[3]
+        X[valid_index] = point3d_eucl
 
     return X
-
 
 
 def EvaluateCheirality(P1, P2, X):
@@ -140,7 +118,6 @@ def EvaluateCheirality(P1, P2, X):
     return valid_index
 
 
-
 def EstimateCameraPose(track1, track2):
     """
     Return the best pose conﬁguration
@@ -161,9 +138,14 @@ def EstimateCameraPose(track1, track2):
     X : ndarray of shape (F, 3)
         The set of reconstructed 3D points
     """
-    ransac_n_iter = 500
-    ransac_thr = 0.01
-    E, inlier = EstimateE_RANSAC(track1, track2, ransac_n_iter, ransac_thr)
+    ransac_n_iter = 1000
+    ransac_thr = 0.001
+
+    mask_valid = np.any(track1 != -1, axis=1) & np.any(track2 != -1, axis=1)
+    track1_valid = track1[mask_valid]
+    track2_valid = track2[mask_valid]
+
+    E, inlier = EstimateE_RANSAC(track1_valid, track2_valid, ransac_n_iter, ransac_thr)
     R_set, C_set = GetCameraPoseFromE(E)
 
     P1 = np.hstack([np.eye(3), np.zeros((3, 1))])

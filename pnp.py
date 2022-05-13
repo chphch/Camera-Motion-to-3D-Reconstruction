@@ -22,19 +22,24 @@ def PnP(X, x):
     C : ndarray of shape (3,)
         The camera center
     """
-    
+    indices = np.random.choice(X.shape[0], 6)
+    X_sample = X[indices]
+    x_sample = x[indices]
     A = np.vstack([[
         [Xx, Xy, Xz, 1, 0, 0, 0, 0, -xx * Xx, -xx * Xy, -xx * Xz, -xx],
         [0, 0, 0, 0, Xx, Xy, Xz, 1, -xy * Xx, -xy * Xy, -xy * Xz, -xy],
-    ] for (Xx, Xy, Xz), (xx, xy) in zip(X, x)])
+    ] for (Xx, Xy, Xz), (xx, xy) in zip(X_sample, x_sample)])
     f = get_single_right_null_space(A)
     P = f.reshape(3, 4)
-    U, S, VT = np.linalg.svd(P[:, :3])
+    R = P[:, :3]
+    U, S, VT = np.linalg.svd(R)
     R = U @ VT
-    C = 1 / S[0] * P[:, 3]
-
+    t = 1 / S[0] * P[:, 3]
+    if np.linalg.det(R) < 0:
+        R = -R
+        t = -t
+    C = -R.T @ t
     return R, C
-
 
 
 def PnP_RANSAC(X, x, ransac_n_iter, ransac_thr):
@@ -67,24 +72,24 @@ def PnP_RANSAC(X, x, ransac_n_iter, ransac_thr):
     X_homo = np.insert(X, 3, 1, axis=1)
     R_best = None
     C_best = None
-    mask_inlier_best = np.array([], dtype=bool)
+    mask_best = np.array([], dtype=bool)
     for _ in range(ransac_n_iter):
-        indices = np.random.choice(n, 6, replace=False)
-        R, C = PnP(X[indices], x[indices])
+        R, C = PnP(X, x)
         P = R @ np.hstack([np.eye(3), -C.reshape(-1, 1)])
-        x_proj_homo = X_homo @ P.T
-        x_eucl = x_proj_homo[:, :2] / x_proj_homo[:, [2]]
+        X_proj = X_homo @ P.T
+        x_eucl = X_proj[:, :2] / X_proj[:, [2]]  # X_proj = x_homo
+        mask_valid = X_proj[:, 2] > 0
         mask_inlier = np.linalg.norm(x_eucl - x, axis=1) < ransac_thr
-        if len(mask_inlier_best) < np.sum(mask_inlier):
+        mask = mask_valid & mask_inlier
+        if np.sum(mask_best) < np.sum(mask):
             R_best = R
             C_best = C
-            mask_inlier_best = mask_inlier
+            mask_best = mask
     
     inlier = np.full(n, False)
-    inlier[mask_inlier_best] = True
+    inlier[mask_best] = True
     
     return R_best, C_best, inlier
-
 
 
 def ComputePoseJacobian(p, X):

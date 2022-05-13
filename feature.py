@@ -37,7 +37,7 @@ def MatchSIFT(loc1, des1, loc2, des2):
         The indices of x1 in loc1
     """
 
-    filter_ratio = 0.5
+    filter_ratio = 0.7
     neigh = NearestNeighbors(n_neighbors=2)
     neigh.fit(des2)
     neigh_dist_1_img2, neigh_ind_1_img2 = neigh.kneighbors(des1, return_distance=True) # (n1,?)
@@ -116,16 +116,18 @@ def EstimateE_RANSAC(x1, x2, ransac_n_iter, ransac_thr):
     """
 
     n = x1.shape[0]
-    inlier_best = np.array([])
     E_best = None
+    inlier_best = np.array([])
     x1_homo = np.insert(x1, 2, 1, axis=1)
     x2_homo = np.insert(x2, 2, 1, axis=1)
     for _ in range(ransac_n_iter):
-        indices = np.random.choice(n, 8, replace=False)
+        indices = np.random.choice(n, 8)
         E = EstimateE(x1[indices], x2[indices])
-        xEx = (x2_homo * (x1_homo @ E.T)).sum(axis=1)
-        inlier = np.where(np.abs(xEx) < ransac_thr)[0]
-        if inlier_best.shape[0] < inlier.shape[0]:
+        l2_homo = x1_homo @ E.T
+        xEx = np.sum(x2_homo * l2_homo, axis=1)
+        normalization = np.linalg.norm(x2_homo, axis=1) * np.linalg.norm(l2_homo, axis=1)
+        inlier = np.where(np.abs(xEx / normalization) < ransac_thr)[0]
+        if inlier.shape[0] > inlier_best.shape[0]:
             E_best = E
             inlier_best = inlier
     return E_best, inlier_best
@@ -146,7 +148,7 @@ def BuildFeatureTrack(Im, K):
         The feature tensor, where F is the number of total features
     """
 
-    ransac_n_iter = 500
+    ransac_n_iter = 10000
     ransac_thr = 0.01
     N = Im.shape[0]
     K_inv = np.linalg.inv(K)
