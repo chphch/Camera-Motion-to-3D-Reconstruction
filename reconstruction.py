@@ -23,8 +23,7 @@ def FindMissingReconstruction(X, track_i):
         not reconstructed yet
     """
     
-    return np.any(X != -1, axis=1) & np.any(track_i != -1, axis=1)
-
+    return np.all(X == -1, axis=1) & np.any(track_i != -1, axis=1)
 
 
 def Triangulation_nl(X, P1, P2, x1, x2):

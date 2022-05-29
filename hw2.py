@@ -26,13 +26,14 @@ def visualize_3d_points(X, P_set, label):
         m = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.4)
         m.transform(T)
         m_set = m_set + m if m_set else m
-    o3d.io.write_triangle_mesh(f'camera_intermid_{label}.ply', m_set)
+    o3d.io.write_triangle_mesh(f'output/camera_intermid_{label}.ply', m_set)
     pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(X))
     pcd.colors = o3d.utility.Vector3dVector(np.full((X.shape[0], 3), 0))
-    o3d.io.write_point_cloud(f'points_intermid_{label}.ply', pcd)
+    o3d.io.write_point_cloud(f'output/points_intermid_{label}.ply', pcd)
 
 
 if __name__ == '__main__':
+    np.random.seed(2)
     K = np.asarray([
         [350, 0, 480],
         [0, 350, 270],
@@ -72,11 +73,11 @@ if __name__ == '__main__':
     ransac_n_iter = 200
     ransac_thr = 0.01
     for i in range(2, num_images):
-        mask_new_point_i = FindMissingReconstruction(X, track[i])
 
         # Estimate new camera pose
-        X_valid = X[mask_new_point_i]
-        track_i_valid = track[i, mask_new_point_i]
+        mask = np.any(X != -1, axis=1) & np.any(track[i] != -1, axis=1)
+        X_valid = X[mask]
+        track_i_valid = track[i, mask]
         R, C, inlier = PnP_RANSAC(X_valid, track_i_valid, ransac_n_iter, ransac_thr)
         R_refined, C_refined = PnP_nl(R, C, X_valid[inlier], track_i_valid[inlier])
 
@@ -85,6 +86,7 @@ if __name__ == '__main__':
 
         for j in range(i):
             # Fine new points to reconstruct
+            mask_new_point_i = FindMissingReconstruction(X, track[i])
             mask_new_point_j = FindMissingReconstruction(X, track[j])
             mask_new_point = mask_new_point_i & mask_new_point_j
 
@@ -103,17 +105,18 @@ if __name__ == '__main__':
             X[valid_index_global] = X_refined[valid_index]
         
         # Run bundle adjustment
-        valid_ind = X[:, 0] != -1
-        X_ba = X[valid_ind, :]
-        track_ba = track[:i + 1, valid_ind, :]
-        P_new, X_new = RunBundleAdjustment(P[:i + 1, :, :], X_ba, track_ba)
-        P[:i + 1, :, :] = P_new
-        X[valid_ind, :] = X_new
+        
+        num_bundle_adjustment = 5
+        for _ in range(num_bundle_adjustment):
+            valid_ind = X[:, 0] != -1
+            X_ba = X[valid_ind, :]
+            track_ba = track[:i + 1, valid_ind, :]
+            P_new, X_new = RunBundleAdjustment(P[:i + 1, :, :], X_ba, track_ba)
+            P[:i + 1, :, :] = P_new
+            X[valid_ind, :] = X_new
 
-        P[:i+1,:,:] = P_new
-        X[valid_ind,:] = X_new
-
-        visualize_3d_points(X_valid, P[:i], i)
+            P[:i+1,:,:] = P_new
+            X[valid_ind,:] = X_new
 
         ###############################################################
         # Save the camera coordinate frames as meshes for visualization

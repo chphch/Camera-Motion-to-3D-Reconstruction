@@ -139,7 +139,7 @@ def EstimateCameraPose(track1, track2):
         The set of reconstructed 3D points
     """
     ransac_n_iter = 1000
-    ransac_thr = 0.001
+    ransac_thr = 0.01
 
     mask_valid = np.any(track1 != -1, axis=1) & np.any(track2 != -1, axis=1)
     track1_valid = track1[mask_valid]

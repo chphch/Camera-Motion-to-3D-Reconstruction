@@ -31,8 +31,7 @@ def PnP(X, x):
     ] for (Xx, Xy, Xz), (xx, xy) in zip(X_sample, x_sample)])
     f = get_single_right_null_space(A)
     P = f.reshape(3, 4)
-    R = P[:, :3]
-    U, S, VT = np.linalg.svd(R)
+    U, S, VT = np.linalg.svd(P[:, :3])
     R = U @ VT
     t = 1 / S[0] * P[:, 3]
     if np.linalg.det(R) < 0:

@@ -121,12 +121,10 @@ def EstimateE_RANSAC(x1, x2, ransac_n_iter, ransac_thr):
     x1_homo = np.insert(x1, 2, 1, axis=1)
     x2_homo = np.insert(x2, 2, 1, axis=1)
     for _ in range(ransac_n_iter):
-        indices = np.random.choice(n, 8)
+        indices = np.random.choice(n, 8, replace=False)
         E = EstimateE(x1[indices], x2[indices])
-        l2_homo = x1_homo @ E.T
-        xEx = np.sum(x2_homo * l2_homo, axis=1)
-        normalization = np.linalg.norm(x2_homo, axis=1) * np.linalg.norm(l2_homo, axis=1)
-        inlier = np.where(np.abs(xEx / normalization) < ransac_thr)[0]
+        xEx = np.abs(np.diag(x2_homo @ E @ x1_homo.T))
+        inlier = np.where(xEx < ransac_thr)[0]
         if inlier.shape[0] > inlier_best.shape[0]:
             E_best = E
             inlier_best = inlier
@@ -148,7 +146,7 @@ def BuildFeatureTrack(Im, K):
         The feature tensor, where F is the number of total features
     """
 
-    ransac_n_iter = 10000
+    ransac_n_iter = 1000
     ransac_thr = 0.01
     N = Im.shape[0]
     K_inv = np.linalg.inv(K)
